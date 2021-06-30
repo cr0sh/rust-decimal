@@ -3288,7 +3288,7 @@ mod maths {
             (
                 "0.5",
                 "0.25",
-                either!("0.8410938963634267005719877122", "0.8410938963634267005719877121"),
+                either!("0.8408964159265360661551317741", "0.8410938963634267005719877121"),
             ),
             // ~= 0.999999999999999999999999999790814
             (
@@ -3300,18 +3300,18 @@ mod maths {
             (
                 "1234.5678",
                 "0.9012",
-                either!("611.04510400020872819829427791", "611.04510400020872819829429407"),
+                either!("611.04510415448740041442807964", "611.04510400020872819829429407"),
             ),
             (
                 "-2",
                 "0.5",
-                either!("-1.4142700792209353663825932515", "-1.4142700792209353663825932497"),
+                either!("-1.4142135570048917090885260834", "-1.4142700792209353663825932497"),
             ),
             // ~= -1.1193003023312942
             (
                 "-2.5",
                 "0.123",
-                either!("-1.1193076423225947707712184105", "-1.1193076423225947707712184107"),
+                either!("-1.1193002994383985239135362086", "-1.1193076423225947707712184107"),
             ),
             // TODO: Overflows when calculating `ln`
             // ~= 0.0003493091
@@ -3535,37 +3535,50 @@ mod maths {
 
     #[test]
     fn test_ln() {
-        let test_cases = &[
-            (Decimal::from_str("1").unwrap(), Decimal::from_str("0").unwrap()),
-            (Decimal::from_str("0").unwrap(), Decimal::from_str("0").unwrap()),
-            (Decimal::from_str("-2.0").unwrap(), Decimal::from_str("0").unwrap()),
+        let test_cases = [
+            ("1", "0"),
+            ("0", "0"),
+            ("-2.0", "0"),
             (
-                Decimal::from_str("0.23").unwrap(),
+                "0.23",
                 // Wolfram Alpha gives -1.46968
-                Decimal::from_str("-1.4661188292208822723626471532").unwrap(),
+                "-1.4661188292208822723626471532",
             ),
             (
-                Decimal::from_str("2").unwrap(),
+                "2",
                 // Wolfram Alpha gives 0.693147180559945309417232121458176568075500134360255254120
-                Decimal::from_str(either!(
-                    "0.6932271134541528994884316448",
-                    "0.6932271134541528994884316422"
-                ))
-                .unwrap(),
+                either!("0.6932271134541528994884316448", "0.6932271134541528994884316422"),
             ),
             (
-                Decimal::from_str("25").unwrap(),
+                "25",
                 // Wolfram Alpha gives 3.218875824868200749201518666452375279051202708537035443825
-                Decimal::from_str(either!(
-                    "3.2188760588726737559923925704",
-                    "3.218876058872673755992392564"
-                ))
-                .unwrap(),
+                either!("3.2188760588726737559923925704", "3.218876058872673755992392564"),
             ),
         ];
 
-        for case in test_cases {
-            assert_eq!(case.1, case.0.ln());
+        for (input, expected) in test_cases {
+            let input = Decimal::from_str(input).unwrap();
+            let expected = Decimal::from_str(expected).unwrap();
+            assert_eq!(expected, input.ln(), "Failed to calculate ln({})", input);
+        }
+    }
+
+    #[test]
+    fn test_log10() {
+        let test_cases = [
+            ("1", "0"),
+            // Wolfram Alpha: 0.3010299956639811952137388947
+            ("2", "0.3010299956639811952137388949"),
+            ("10", "1"),
+            ("1.234567890", "0.0915149772"),
+            ("100", "2"),
+            ("1000", "3"),
+        ];
+
+        for (input, expected) in test_cases {
+            let input = Decimal::from_str(input).unwrap();
+            let expected = Decimal::from_str(expected).unwrap();
+            assert_eq!(expected, input.log10(), "Failed to calculate log10({})", input);
         }
     }
 

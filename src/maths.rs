@@ -97,6 +97,9 @@ pub trait MathematicalOps {
     /// This is more accurate on larger numbers and less on numbers less than 1.
     fn ln(&self) -> Decimal;
 
+    /// Returns the base 10 logarithm of a specified Decimal number.
+    fn log10(&self) -> Decimal;
+
     /// Abramowitz Approximation of Error Function from [wikipedia](https://en.wikipedia.org/wiki/Error_function#Numerical_approximations)
     fn erf(&self) -> Decimal;
 
@@ -269,11 +272,11 @@ impl MathematicalOps for Decimal {
                 return None;
             }
 
-            if exp.is_sign_negative() {
-                return self.checked_powi(-(exp.lo() as i64));
+            return if exp.is_sign_negative() {
+                self.checked_powi(-(exp.lo() as i64))
             } else {
-                return self.checked_powu(exp.lo() as u64);
-            }
+                self.checked_powu(exp.lo() as u64)
+            };
         }
 
         // We do some approximations since we've got a decimal exponent.
@@ -321,21 +324,43 @@ impl MathematicalOps for Decimal {
     }
 
     fn ln(&self) -> Decimal {
+        // We should perhaps consider this a panic in future versions
+        if self.is_sign_negative() || self.is_zero() {
+            return Decimal::ZERO;
+        }
+        //
+        // ln(x) = (PI / (2 * M(1, 4/s))) - m * ln(2)
+        //
+        // where M denotes the arithmetic-geometric mean of 1 and 4/s, and s = x*2^m > 2^(p/2)
+        // with m chosen so that p bits of precision is attained.
+        //
         const C4: Decimal = Decimal::from_parts_raw(4, 0, 0, 0);
+
+        // m = 8 so we can precalculate some values (i.e. 2^8 = 256, 8*ln(2))
         const C256: Decimal = Decimal::from_parts_raw(256, 0, 0, 0);
         const EIGHT_LN2: Decimal = Decimal::from_parts(1406348788, 262764557, 3006046716, false, 28);
 
-        if self.is_sign_positive() && !self.is_zero() {
-            if *self == Decimal::ONE {
-                Decimal::ZERO
-            } else {
-                let rhs = C4 / (self * C256);
-                let arith_geo_mean = arithmetic_geo_mean_of_2(&Decimal::ONE, &rhs);
-                (PI / (arith_geo_mean * TWO)) - EIGHT_LN2
-            }
-        } else {
+        if self.is_one() {
             Decimal::ZERO
+        } else {
+            let rhs = C4 / (self * C256);
+            let arith_geo_mean = arithmetic_geo_mean_of_2(&Decimal::ONE, &rhs);
+            (PI / (arith_geo_mean * TWO)) - EIGHT_LN2
         }
+    }
+
+    fn log10(&self) -> Decimal {
+        // This uses a very basic method for calculating log10. We know the following is true:
+        //   log10(n) = ln(n) / ln(10)
+        // From this we can perform some small optimizations:
+        //  1. ln(10) is a constant
+        //  2. Multiplication is faster than division, so we can pre-calculate the constant 1/ln(10)
+        // This allows us to then simplify log10(n) to:
+        //   log10(n) = C * ln(n)
+        // In this case, C ~= 0.434294481903251827651128918916605082294397005803666566114
+        const LOG10_INVERSE: Decimal = Decimal::from_parts_raw(1763037029, 1670682625, 235431510, 1835008);
+
+        LOG10_INVERSE * self.ln()
     }
 
     fn erf(&self) -> Decimal {
@@ -430,6 +455,45 @@ fn geo_mean_of_2(a: &Decimal, b: &Decimal) -> Decimal {
     // TODO: This can overflow unnecessarily. We should keep this in an internal representation until
     //       absolutely necessary to convert back.
     (a * b).sqrt().unwrap()
+}
+
+fn ln_taylor(x: &Decimal) -> Decimal {
+    // 2.7182818284590452353602874714
+    const E: Decimal = Decimal::from_parts_raw(2239425882, 3958169141, 1473583531, 1835008);
+    // 0.3678794411714423215955237702
+    const E_INVERSE: Decimal = Decimal::from_parts_raw(2384059206, 2857938002, 199427844, 1835008);
+
+    if x.is_sign_negative() || x.is_zero() {
+        // TODO: This should probably panic. To curb this, we should include a checked option
+        return Decimal::ZERO;
+    }
+
+    // Approximate using Taylor Series
+    let mut x = *x;
+    let mut count = 0;
+    while x >= Decimal::ONE {
+        x *= E_INVERSE;
+        count += 1;
+    }
+    while x <= E_INVERSE {
+        x *= E;
+        count -= 1;
+    }
+    x -= Decimal::ONE;
+    if x.is_zero() {
+        return Decimal::new(count, 0);
+    }
+    let mut result = Decimal::ZERO;
+    let mut iteration = 0;
+    let mut y = Decimal::ONE;
+    let mut last = Decimal::ONE;
+    while last != result && iteration < 100 {
+        iteration += 1;
+        last = result;
+        y *= -x;
+        result += y / Decimal::new(iteration, 0);
+    }
+    Decimal::new(count, 0) - result
 }
 
 #[cfg(test)]
