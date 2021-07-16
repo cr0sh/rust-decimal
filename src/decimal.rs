@@ -71,7 +71,8 @@ pub struct UnpackedDecimal {
 /// between 0 and 28 inclusive.
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "diesel", derive(FromSqlRow, AsExpression), sql_type = "Numeric")]
-#[cfg_attr(feature = "c-repr", repr(C))]
+#[cfg_attr(any(feature = "c-repr", feature = "hdf5-derive"), repr(C))]
+#[cfg_attr(feature = "hdf5-derive", derive(hdf5::H5Type))]
 pub struct Decimal {
     // Bits 0-15: unused
     // Bits 16-23: Contains "e", a value between 0-28 that indicates the scale
